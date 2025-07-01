@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Art Alley</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        :root {
+            --background-color: #0d0d0d;
+            --grid-background: #101010;
+            --text-color: #e0e0e0;
+            --primary-color: #00f7ff;
+            --secondary-color: #1a1a1a;
+            --border-color: #333;
+            --shadow-color: rgba(0, 247, 255, 0.2);
+            --font-family-mono: 'Roboto Mono', monospace;
+            --font-family-sans: 'Inter', sans-serif;
+            --success-glow: rgba(0, 255, 135, 0.5);
+            --hint-glow: rgba(255, 255, 0, 0.5);
+            --info-glow: rgba(255, 165, 0, 0.5);
+            --error-glow: rgba(255, 0, 0, 0.5);
+            --ui-glow-strong: rgba(0, 247, 255, 0.8);
+            --ui-glow-subtle: rgba(0, 247, 255, 0.1);
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            font-family: var(--font-family-sans);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #282828;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 10px;
+            border: 1px solid #1a1a1a;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00e0e0;
+        }
+
+        #loading-screen {
+            display: none;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        #scanline-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.1),
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.1;
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 1400px;
+            z-index: 1;
+            opacity: 1;
+            transition: opacity 1s ease-in;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            color: var(--primary-color);
+            text-shadow: 0 0 15px var(--primary-color), 0 0 25px var(--primary-color);
+            margin: 0;
+            font-family: var(--font-family-mono);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background-color: var(--secondary-color);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 0 25px var(--shadow-color);
+            border: 1px solid var(--border-color);
+            width: 95%;
+            max-width: 1200px;
+            box-sizing: border-box;
+        }
+        
+        .control-section {
+            padding: 0.5rem;
+            border-radius: 8px;
+            background-color: #151515;
+            border: 1px solid #222;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-section-title {
+            font-size: 1.1rem;
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 0.75rem;
+            text-align: center;
+            text-shadow: 0 0 8px var(--primary-color);
+        }
+
+        .control-group-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tool-button, .action-button {
+            background-color: #282828;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: var(--font-family-sans);
+            font-weight: bold;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tool-button[disabled], .action-button[disabled] {
+            opacity: 0.4;
+            cursor: not-allowed;
+            background-color: #282828;
+            color: var(--text-color);
+            box-shadow: none;
+        }
+
+        .tool-button:hover:not([disabled]), .action-button:hover:not([disabled]) {
+            background-color: var(--primary-color);
+            color: #000;
+            box-shadow: 0 0 10px var(--primary-color);
+            transform: translateY(-2px);
+        }
+        
+        .tool-button.active {
+            background-color: var(--primary-color);
+            color: #000;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 15px var(--primary-color);
+        }
+
+        .tool-button svg, .action-button svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        #char-input {
+            width: 40px;
+            height: 40px;
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 8px;
+            font-size: 1.5rem;
+            text-align: center;
+            font-family: var(--font-family-mono);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        #char-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px var(--primary-color);
+        }
+
+        #color-picker {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid var(--border-color);
+            overflow: hidden;
+            background-color: transparent;
+            position: relative;
+        }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding: 0;
+            border: none;
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            cursor: pointer;
+        }
+        
+        .char-palette {
+            display: flex;
+            gap: 0.5rem;
+            background-color: #101010;
+            padding: 0.5rem;
+            border-radius: 8px;
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+        
+        .palette-char {
+            width: 30px;
+            height: 30px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            background-color: #282828;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
+            font-family: var(--font-family-mono);
+        }
+        
+        .palette-char:hover, .palette-char.active {
+            background-color: var(--primary-color);
+            color: #000;
+            transform: scale(1.1);
+            box-shadow: 0 0 8px var(--primary-color);
+        }
+        
+        #canvas-wrapper {
+            position: relative;
+            background-color: var(--grid-background);
+            border: 2px solid var(--border-color);
+            box-shadow: 0 8px 30px var(--shadow-color);
+            border-radius: 8px;
+            overflow: hidden;
+            transform-origin: top left;
+        }
+        #canvas-wrapper.no-grid-lines .grid-cell {
+            border: none !important;
+        }
+        #main-canvas .grid-cell { border: none; }
+
+
+        #main-canvas, #challenge-trace-canvas {
+            display: grid;
+            user-select: none;
+            touch-action: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #main-canvas {
+            z-index: 10;
+            background-color: transparent;
+        }
+
+        #challenge-trace-canvas {
+            z-index: 5;
+            opacity: 0.2;
+            pointer-events: none;
+            background-color: transparent;
+        }
+        
+        .grid-cell {
+            color: #fff;
+            text-align: center;
+            box-sizing: border-box;
+            line-height: 1;
+            transition: box-shadow 0.3s ease-out;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .correct-char { 
+            box-shadow: inset 0 0 8px var(--success-glow);
+        }
+        .hint-char { 
+            box-shadow: inset 0 0 12px 2px var(--hint-glow);
+        }
+
+        #challenge-bar {
+            width: 95%;
+            max-width: 1200px;
+            background: var(--secondary-color);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border: 1px solid var(--primary-color);
+            box-shadow: 0 0 15px var(--shadow-color);
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        #challenge-bar span { font-weight: bold; }
+        #challenge-char-display {
+            display: inline-block;
+            width: 30px; height: 30px;
+            background: var(--grid-background);
+            border-radius: 4px; text-align: center;
+            line-height: 30px; font-size: 1.2rem;
+            border: 1px solid var(--border-color);
+            font-family: var(--font-family-mono);
+            vertical-align: middle;
+        }
+        
+        #frames-container {
+            width: 95%; max-width: 1200px; display: flex;
+            gap: 10px; padding: 10px; overflow-x: auto;
+            background: #1a1a1a; border-radius: 8px; margin-top: 1rem;
+            border: 1px solid var(--border-color);
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        .frame-thumbnail {
+            width: 80px; height: 40px; border: 2px solid var(--border-color); cursor: pointer;
+            background: var(--grid-background); flex-shrink: 0; font-family: var(--font-family-mono);
+            font-size: 2px; line-height: 1; overflow: hidden; white-space: pre;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+
+        .frame-thumbnail.active { 
+            border-color: var(--primary-color); 
+            box-shadow: 0 0 10px var(--primary-color); 
+        }
+
+        .frame-index {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 8px;
+            font-family: var(--font-family-sans);
+            pointer-events: none;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 120px;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 5px;
+            outline: none;
+            transition: opacity .2s;
+            margin: 0 0.5rem;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--primary-color);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--primary-color);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .modal-content {
+            background-color: #1f1f1f;
+            padding: 25px;
+            border: 1px solid var(--primary-color);
+            width: 90%;
+            max-width: 500px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 0 30px var(--shadow-color);
+            position: relative;
+            animation: fadeInScale 0.3s ease-out;
+        }
+        .modal-header h2 { 
+            color: var(--primary-color); 
+            margin-top: 0; 
+            font-family: var(--font-family-sans);
+        }
+        .modal-body { 
+            margin-top: 1rem; 
+            font-family: var(--font-family-sans);
+            max-height: 60vh;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        .modal-body p { margin-bottom: 1rem; }
+        .modal-body ul { text-align: left; margin: 1rem auto; max-width: 80%; }
+        .modal-body li { margin-bottom: 0.5rem; }
+        .modal-body strong { color: var(--primary-color); text-shadow: 0 0 5px var(--primary-color); }
+
+
+        .modal-footer { 
+            margin-top: 20px; 
+            display: flex; 
+            justify-content: center; 
+            gap: 1rem; 
+            flex-wrap: wrap;
+        }
+
+        .hidden { display: none !important; }
+        
+        #challenge-selection { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
+            gap: 1rem; 
+            max-height: 50vh; 
+            overflow-y: auto; 
+            padding-right: 5px;
+        }
+        #challenge-selection label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        #challenge-difficulty-select {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem;
+            border-radius: 8px;
+            font-family: var(--font-family-sans);
+            margin-bottom: 1rem;
+            width: 100%;
+            max-width: 200px;
+            text-align: center;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+        }
+        #challenge-difficulty-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px var(--primary-color);
+        }
+
+        .challenge-preview {
+            border: 2px solid var(--border-color); 
+            cursor: pointer; 
+            background: var(--grid-background);
+            font-family: var(--font-family-mono); 
+            font-size: 5px;
+            line-height: 0.9; 
+            overflow: hidden; 
+            white-space: pre; 
+            aspect-ratio: 2 / 1;
+            display: flex; 
+            align-items: center;
+            justify-content: center;
+            color: var(--text-color);
+            border-radius: 6px;
+            padding: 5px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .challenge-preview:hover { 
+            border-color: var(--primary-color); 
+            box-shadow: 0 0 10px var(--primary-color);
+        }
+
+        #feedback-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--primary-color);
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px var(--info-glow);
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            font-weight: bold;
+            display: none;
+        }
+        #feedback-message.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            display: block;
+            animation: pulseGlow 1.5s infinite alternate;
+        }
+
+        footer {
+            margin-top: 2rem;
+            color: #555;
+            font-size: 0.8rem;
+            font-family: var(--font-family-sans);
+        }
+
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 10px var(--info-glow); }
+            100% { box-shadow: 0 0 25px var(--info-glow); }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                padding: 0.75rem;
+                margin-bottom: 1rem;
+            }
+            .tool-button, .action-button {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
+            }
+            .control-group {
+                gap: 0.4rem;
+            }
+            #char-input, #color-picker {
+                width: 35px;
+                height: 35px;
+            }
+            .palette-char {
+                width: 28px;
+                height: 28px;
+                font-size: 1.1rem;
+            }
+            #challenge-bar {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
+            }
+            #challenge-char-display {
+                width: 25px; height: 25px;
+                line-height: 25px; font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div id="loading-text">Loading  Art Alley...</div>
+        <div id="loading-bar-container">
+            <div id="loading-bar"></div>
+        </div>
+    </div>
+
+    <canvas id="bg-canvas"></canvas>
+    <div id="scanline-overlay"></div>
+
+    <div class="main-container">
+        <header>
+            <h1> Art Alley</h1>
+        </header>
+
+        <div class="controls" id="main-controls">
+            <div class="control-section">
+                <div class="control-section-title">Drawing Tools</div>
+                <div class="control-group-wrapper">
+                    <button class="tool-button active" id="pencil-tool" title="Pencil">
+                        <svg viewBox="0 0 24 24"><path d="M14.06,9L15,9.94L5.92,19H5V18.08L14.06,9M17.66,3C17.41,3 17.15,3.1 16.96,3.29L15.13,5.12L18.88,8.87L20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18.17,3.09 17.92,3 17.66,3M14.06,6.19L3,17.25V21H6.75L17.81,9.94L14.06,6.19Z" /></svg>
+                        Pencil
+                    </button>
+                    <button class="tool-button" id="eraser-tool" title="Eraser">
+                        <svg viewBox="0 0 24 24"><path d="M16.24,3.56L21.19,8.5C21.97,9.29 21.97,10.55 21.19,11.34L12,20.53V20.53L11.96,20.57L2.81,11.41C2.03,10.63 2.03,9.37 2.81,8.59L7.76,3.64C8.54,2.86 9.8,2.86 10.59,3.64L12,5.05L13.41,3.64C14.2,2.86 15.46,2.86 16.24,3.56M10.59,6.46L7.05,2.93C6.66,2.54 6.03,2.54 5.64,2.93L2.93,5.64C2.54,6.03 2.54,6.66 2.93,7.05L12,16.12L21.07,7.05C21.46,6.66 21.46,6.03 21.07,5.64L18.36,2.93C17.97,2.54 17.34,2.54 16.95,2.54L13.41,6.46L12,7.88L10.59,6.46Z" /></svg>
+                        Eraser
+                    </button>
+                    <button class="tool-button" id="fill-tool" title="Fill">
+                        <svg viewBox="0 0 24 24"><path d="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12.5,17H11V10H12.5V17M12.5,9H11V7H12.5V9Z" /></svg>
+                        Fill
+                    </button>
+                    <button class="action-button" id="rainbow-mode-btn">Rainbow Mode: OFF</button>
+                    <div class="control-group">
+                        <input type="color" id="color-picker" value="#00f7ff">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <div class="control-section-title">Character & Palette</div>
+                <div class="control-group-wrapper">
+                    <div class="control-group">
+                        <label for="char-input">Char:</label>
+                        <input type="text" id="char-input" maxlength="1" value="#">
+                    </div>
+                    <div class="char-palette" id="char-palette"></div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="control-section-title">Animation Controls</div>
+                <div class="control-group-wrapper">
+                    <button class="action-button" id="play-btn">
+                        <svg viewBox="0 0 24 24"><path d="M8,5.14V19.14L19,12.14L8,5.14Z" /></svg>
+                        Play
+                    </button>
+                    <button class="action-button" id="add-frame-btn">
+                        <svg viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>
+                        + Frame
+                    </button>
+                    <button class="action-button" id="copy-frame-btn">
+                        <svg viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" /></svg>
+                        Copy Frame
+                    </button>
+                    <button class="action-button" id="delete-frame-btn">
+                        <svg viewBox="0 0 24 24"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg>
+                        - Frame
+                    </button>
+                    <div class="control-group">
+                        <label for="fps-input">FPS:</label>
+                        <input type="range" id="fps-input" min="1" max="24" value="8">
+                        <span id="fps-display">8</span>
+                    </div>
+                    <span id="frame-counter">Frame: 1 / 1</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="control-section-title">Utility Actions</div>
+                <div class="control-group-wrapper">
+                    <button class="action-button" id="undo-btn" disabled>
+                        <svg viewBox="0 0 24 24"><path d="M12.5,8C9.82,8 7.29,8.77 5.09,10.15L3.3,8.36L2,9.66L4.7,12.36C4.07,13.88 3.82,15.5 3.82,17.18H5.82C5.82,15.65 6.13,14.19 6.74,12.87L9.36,10.25C10.22,9.44 11.31,9 12.5,9C14.71,9 16.63,10.66 17.18,12.82L19.18,12.82C18.63,9.54 15.81,7 12.5,7V4L7.5,9L12.5,14V11C15.71,11 18.53,13.46 19.18,16.82L21.18,16.82C20.63,13.54 17.81,11 14.5,11V14L19.5,9L14.5,4Z" /></svg>
+                        Undo
+                    </button>
+                    <button class="action-button" id="redo-btn" disabled>
+                        <svg viewBox="0 0 24 24"><path d="M12.5,8C15.18,8 17.71,8.77 19.91,10.15L21.7,8.36L23,9.66L20.3,12.36C20.93,13.88 21.18,15.5 21.18,17.18H19.18C19.18,15.65 18.87,14.19 18.26,12.87L15.64,10.25C14.78,9.44 13.69,9 12.5,9C10.29,9 8.37,10.66 7.82,12.82L5.82,12.82C6.37,9.54 9.19,7 12.5,7V4L17.5,9L12.5,14V11C9.29,11 6.47,13.46 5.82,16.82L3.82,16.82C4.37,13.54 7.19,11 10.5,11V14L5.5,9L10.5,4Z" /></svg>
+                        Redo
+                    </button>
+                    <button class="action-button" id="clear-btn">
+                        <svg viewBox="0 0 24 24"><path d="M19,13H5V11H19M12,2A10,10 0 0,0 4,4V20A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" /></svg>
+                        Clear
+                    </button>
+                    <button class="action-button" id="grid-toggle-btn">
+                        <svg viewBox="0 0 24 24"><path d="M22 10V14H12V10H22M10 10V14H2V10H10M22 4V8H12V4H22M10 4V8H2V4H10M22 16V20H12V16H22M10 16V20H2V16H10Z" /></svg>
+                        Grid: ON
+                    </button>
+                    <div class="control-group zoom-controls">
+                        <button class="action-button" id="zoom-in-btn">
+                            <svg viewBox="0 0 24 24"><path d="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16C5.91,16 3,13.09 3,9.5C3,5.91 5.91,3 9.5,3C13.09,3 16,5.91 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12.09,14 14,11.91 14,9.5C14,7.09 12.09,5 9.5,5C6.91,5 5,7.09 5,9.5C5,11.91 6.91,14 9.5,14M12,10H10V12H9V10H7V9H9V7H10V9H12V10Z" /></svg>
+                            Zoom In
+                        </button>
+                        <button class="action-button" id="zoom-out-btn">
+                            <svg viewBox="0 0 24 24"><path d="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16C5.91,16 3,13.09 3,9.5C3,5.91 5.91,3 9.5,3C13.09,3 16,5.91 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12.09,14 14,11.91 14,9.5C14,7.09 12.09,5 9.5,5C6.91,5 5,7.09 5,9.5C5,11.91 6.91,14 9.5,14M7,9H12V10H7V9Z" /></svg>
+                            Zoom Out
+                        </button>
+                    </div >
+                    <button class="action-button" id="save-btn">
+                        <svg viewBox="0 0 24 24"><path d="M15,9H5V5H15M12,17A3,3 0 0,0 15,14A3,3 0 0,0 12,11A3,3 0 0,0 9,14A3,3 0 0,0 12,17M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" /></svg>
+                        Save
+                    </button>
+                    <button class="action-button" id="load-btn">
+                        <svg viewBox="0 0 24 24"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12,10A3,3 0 0,0 9,13A3,3 0 0,0 12,16A3,3 0 0,0 15,13A3,3 0 0,0 12,10Z" /></svg>
+                        Load
+                    </button>
+                    <button class="action-button" id="export-btn">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8zM12 4c-4.41 0-8 3.59-8 8s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm-1 12H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+                        Export .txt
+                    </button>
+                </div>
+            </div>
+            <button class="action-button" id="challenge-mode-btn">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                Challenge Mode
+            </button>
+        </div>
+        
+        <div id="challenge-bar" class="hidden">
+            <span>Score: <span id="challenge-score">0%</span></span>
+            <span>Next Char: <span id="challenge-char-display">#</span></span>
+            <div class="control-group">
+                <button id="hint-btn" class="action-button">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                    Hint
+                </button>
+                <button id="show-solution-btn" class="action-button">
+                    <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6.00 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6.00-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    Show Solution
+                </button>
+                <button id="new-challenge-btn" class="action-button">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                    New Challenge
+                </button>
+                <button class="action-button" id="quit-challenge-btn">
+                    <svg viewBox="0 0 24 24"><path d="M13.41 12l4.3-4.29a1 1 0 1 0-1.42-1.42L12 10.59l-4.29-4.3a1 1 0 0 0-1.42 1.42L10.59 12l-4.3 4.29a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0L12 13.41l4.29 4.3a1 1 0 0 0 1.42 0 1 1 0 0 0 0-1.42z"/></svg>
+                    Quit
+                </button>
+            </div>
+        </div>
+
+        <div id="canvas-wrapper">
+            <div id="challenge-trace-canvas"></div>
+            <div id="main-canvas"></div>
+        </div>
+        
+        <div id="frames-container"></div>
+    </div>
+    
+    <div id="feedback-message" class="hidden"></div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title"></h2>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer">
+                <button class="action-button" id="modal-confirm-btn">OK</button>
+                <button class="action-button hidden" id="modal-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let audioContextInitiated = false;
+        let synth;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const COLS = 60;
+            const ROWS = 30;
+
+            let BASE_CELL_SIZE = 18;
+            let CELL_SIZE = BASE_CELL_SIZE;
+
+            const mainContainer = document.getElementById('main-container');
+
+            const canvasWrapper = document.getElementById('canvas-wrapper');
+            const mainCanvas = document.getElementById('main-canvas');
+            const challengeTraceCanvas = document.getElementById('challenge-trace-canvas');
+            const charInput = document.getElementById('char-input');
+            const colorPicker = document.getElementById('color-picker');
+            const pencilTool = document.getElementById('pencil-tool');
+            const eraserTool = document.getElementById('eraser-tool');
+            const fillTool = document.getElementById('fill-tool');
+            const exportBtn = document.getElementById('export-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const challengeBtn = document.getElementById('challenge-btn');
+            const charPalette = document.getElementById('char-palette');
+            const rainbowModeBtn = document.getElementById('rainbow-mode-btn');
+            
+            const framesContainer = document.getElementById('frames-container');
+            const addFrameBtn = document.getElementById('add-frame-btn');
+            const copyFrameBtn = document.getElementById('copy-frame-btn');
+            const deleteFrameBtn = document.getElementById('delete-frame-btn');
+            const playBtn = document.getElementById('play-btn');
+            const fpsInput = document.getElementById('fps-input');
+            const fpsDisplay = document.getElementById('fps-display');
+            const frameCounter = document.getElementById('frame-counter');
+            
+            const undoBtn = document.getElementById('undo-btn');
+            const redoBtn = document.getElementById('redo-btn');
+            const gridToggleBtn = document.getElementById('grid-toggle-btn');
+            const zoomInBtn = document.getElementById('zoom-in-btn');
+            const zoomOutBtn = document.getElementById('zoom-out-btn');
+            const saveBtn = document.getElementById('save-btn');
+            const loadBtn = document.getElementById('load-btn');
+
+            const feedbackMessage = document.getElementById('feedback-message');
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+            const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+            const challengeBar = document.getElementById('challenge-bar');
+            const newChallengeBtn = document.getElementById('new-challenge-btn');
+            const hintBtn = document.getElementById('hint-btn');
+            const quitChallengeBtn = document.getElementById('quit-challenge-btn');
+            const showSolutionBtn = document.getElementById('show-solution-btn');
+
+            let activeTool = 'pencil';
+            let isDrawing = false;
+            let isRainbowMode = false;
+            let rainbowHue = 0;
+            let showGrid = true;
+
+            let frames = [];
+            let currentFrameIndex = 0;
+            let isPlaying = false;
+            let animationInterval;
+
+            let inChallengeMode = false;
+            let challengeSolution = null;
+            let totalChallengeChars = 0;
+            let hintTimeout = null;
+
+            let canvasStateHistory = [];
+            let historyPointer = -1;
+            const MAX_HISTORY_SIZE = 50;
+
+            let zoomLevel = 1.0;
+            const ZOOM_STEP = 0.1;
+            const MIN_ZOOM = 0.5;
+            const MAX_ZOOM = 3.0;
+
+            const paletteChars = ['#', '@', '%', '&', '*', '+', '=', '-', '.', ' ', '_', '|', '/', '\\', '█', '▓', '▒', '░', '▄', '▀', 'O', 'X', 'A', 'V'];
+            
+            const challenges = {
+                "Easy": {
+                    "Smile": [
+                        " _  _ ",
+                        "| _ _ |",
+                        "| (_) |",
+                        " \\___/ "
+                    ],
+                    "Box": [
+                        " ---- ",
+                        "|    |",
+                        " ---- "
+                    ],
+                    "Arrow": [
+                        "  /\\  ",
+                        " /  \\ ",
+                        "/____\\",
+                        "  ||  ",
+                        "  ||  "
+                    ]
+                },
+                "Medium": {
+                    "Ghost": [
+                        "  /---\\",
+                        " | o o |",
+                        " |  _  |",
+                        " \\____/"
+                    ],
+                    "Tree": [
+                        "    /\\    ",
+                        "   /##\\   ",
+                        "  /####\\  ",
+                        " /######\\ ",
+                        "    ||    ",
+                        "    ||    "
+                    ],
+                    "Cup": [
+                        "  _____",
+                        " /     \\",
+                        "|      |",
+                        "|      |__",
+                        " \\_____/  )",
+                        "        ----"
+                    ]
+                },
+                "Hard": {
+                    "Orpheus": [
+                        "  @@@@  ",
+                        " @    @ ",
+                        "@ @  @ @",
+                        "@  @@  @",
+                        " @    @ ",
+                        "  @@@@  "
+                    ],
+                    "Heart": [
+                        " @@@ @@@ ",
+                        "@  @  @  @",
+                        " @    @ ",
+                        "  @  @  ",
+                        "    @ @   ",
+                        "    @    "
+                    ],
+                    "Rocket": [
+                        "    /\\    ",
+                        "   /  \\   ",
+                        "  /____\\  ",
+                        " |      | ",
+                        " |______| ",
+                        " |/\\/\\/\\| ",
+                        "  /\\/\\/\\  "
+                    ],
+                    "Star": [
+                        "    * ",
+                        "   *** ",
+                        "  *****",
+                        " ******* ",
+                        "*********",
+                        " ******* ",
+                        "  ***** ",
+                        "   *** ",
+                        "    * "
+                    ],
+                    "Fish": [
+                        "        _.-._",
+                        "      .'     '.",
+                        "    /   _    \\",
+                        "   |   /  \\   |",
+                        "   \\  |  _  |  /",
+                        "    \\ `-' `-' /",
+                        "      `--.___.-'"
+                    ]
+                }
+            };
+
+            function initializeCanvasDOM(container) {
+                if (!container) return;
+                container.innerHTML = '';
+                const currentDisplayCellSize = CELL_SIZE * zoomLevel;
+                container.style.gridTemplateColumns = `repeat(${COLS}, ${currentDisplayCellSize}px)`;
+                container.style.gridTemplateRows = `repeat(${ROWS}, ${currentDisplayCellSize}px)`;
+                
+                if (canvasWrapper) {
+                    canvasWrapper.style.width = `${COLS * currentDisplayCellSize}px`;
+                    canvasWrapper.style.height = `${ROWS * currentDisplayCellSize}px`;
+                }
+
+                for (let r = 0; r < ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('grid-cell');
+                        cell.dataset.row = r;
+                        cell.dataset.col = c;
+                        cell.style.fontSize = `${currentDisplayCellSize * 0.9}px`;
+                        cell.style.lineHeight = `${currentDisplayCellSize}px`;
+                        container.appendChild(cell);
+                    }
+                }
+                updateGridVisibility();
+            }
+            
+            function createEmptyFrame() {
+                const grid = [];
+                for (let r = 0; r < ROWS; r++) {
+                    const row = [];
+                    for (let c = 0; c < COLS; c++) {
+                        row.push({ char: ' ', color: '#e0e0e0' });
+                    }
+                    grid.push(row);
+                }
+                return grid;
+            }
+
+            function renderCanvas() {
+                const frame = frames[currentFrameIndex];
+                if (!frame) return;
+
+                const cells = mainCanvas.children;
+                if (!cells || cells.length === 0 || cells.length !== COLS * ROWS) {
+                    initializeCanvasDOM(mainCanvas);
+                    renderCanvas(); 
+                    return;
+                }
+
+                for (let r = 0; r < ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const cellData = frame[r][c];
+                        const cellElement = cells[r * COLS + c];
+                        if (cellElement) {
+                            cellElement.textContent = cellData.char;
+                            cellElement.style.color = cellData.color;
+                            
+                            if(inChallengeMode) {
+                                const isCorrect = challengeSolution && challengeSolution[r] && challengeSolution[r][c] !== ' ' && cellData.char === challengeSolution[r][c];
+                                cellElement.classList.toggle('correct-char', isCorrect);
+                            } else {
+                                cellElement.classList.remove('correct-char');
+                            }
+                            cellElement.classList.remove('hint-char');
+                        }
+                    }
+                }
+                updateFrameCounter();
+            }
+
+            function saveCanvasState() {
+                if (historyPointer < canvasStateHistory.length - 1) {
+                    canvasStateHistory = canvasStateHistory.slice(0, historyPointer + 1);
+                }
+                const currentState = frames.map(frame => 
+                    frame.map(row => row.map(cell => ({ ...cell })))
+                );
+                canvasStateHistory.push(currentState);
+                if (canvasStateHistory.length > MAX_HISTORY_SIZE) {
+                    canvasStateHistory.shift();
+                }
+                historyPointer = canvasStateHistory.length - 1;
+                updateUndoRedoButtons();
+            }
+
+            function restoreCanvasState(newPointer) {
+                if (newPointer >= 0 && newPointer < canvasStateHistory.length) {
+                    historyPointer = newPointer;
+                    frames = canvasStateHistory[historyPointer].map(frame => 
+                        frame.map(row => row.map(cell => ({ ...cell })))
+                    );
+                    currentFrameIndex = Math.min(currentFrameIndex, frames.length - 1);
+                    renderCanvas();
+                    updateFramesContainer();
+                    updateUndoRedoButtons();
+                    if (inChallengeMode) {
+                        updateChallengeScore();
+                        updateNextCharHint();
+                    }
+                }
+            }
+
+            function updateUndoRedoButtons() {
+                if (undoBtn) undoBtn.disabled = historyPointer <= 0;
+                if (redoBtn) redoBtn.disabled = historyPointer >= canvasStateHistory.length - 1;
+            }
+
+            function showFeedbackMessage(message, duration = 2000) {
+                if (!feedbackMessage) return;
+
+                feedbackMessage.textContent = message;
+                feedbackMessage.classList.add('show');
+                clearTimeout(feedbackMessage.hideTimeout);
+                feedbackMessage.hideTimeout = setTimeout(() => {
+                    feedbackMessage.classList.remove('show');
+                }, duration);
+            }
+
+            function updateFramesContainer() {
+                if (!framesContainer) return;
+
+                framesContainer.innerHTML = '';
+                frames.forEach((frame, index) => {
+                    const thumbnail = document.createElement('div');
+                    thumbnail.classList.add('frame-thumbnail');
+                    if (index === currentFrameIndex) {
+                        thumbnail.classList.add('active');
+                    }
+                    let previewText = '';
+                    for (let r = 0; r < ROWS; r += 2) {
+                        for (let c = 0; c < COLS; c += 2) {
+                            previewText += frame[r][c].char;
+                        }
+                        previewText += '\n';
+                    }
+                    thumbnail.textContent = previewText;
+                    
+                    const frameIndexSpan = document.createElement('span');
+                    frameIndexSpan.classList.add('frame-index');
+                    frameIndexSpan.textContent = `${index + 1}`;
+                    thumbnail.appendChild(frameIndexSpan);
+
+                    thumbnail.addEventListener('click', () => {
+                        currentFrameIndex = index;
+                        renderCanvas();
+                        updateFramesContainer();
+                    });
+                    framesContainer.appendChild(thumbnail);
+                });
+                const activeThumbnail = framesContainer.querySelector('.frame-thumbnail.active');
+                if (activeThumbnail) {
+                    activeThumbnail.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+                updateFrameControlsState();
+            }
+
+            function addFrame() {
+                stopPlayback();
+                frames.splice(currentFrameIndex + 1, 0, createEmptyFrame());
+                currentFrameIndex++;
+                renderCanvas();
+                updateFramesContainer();
+                saveCanvasState();
+                showFeedbackMessage('Frame added!');
+            }
+
+            function copyFrame() {
+                stopPlayback();
+                const currentGrid = frames[currentFrameIndex];
+                const newGrid = currentGrid.map(row => row.map(cell => ({ ...cell })));
+                frames.splice(currentFrameIndex + 1, 0, newGrid);
+                currentFrameIndex++;
+                renderCanvas();
+                updateFramesContainer();
+                saveCanvasState();
+                showFeedbackMessage('Frame copied!');
+            }
+
+            function deleteFrame() {
+                if (frames.length > 1) {
+                    showModal('Delete Frame', 'Are you sure you want to delete this frame? Your work on this frame will be lost.', 'Delete', true, () => {
+                        stopPlayback();
+                        frames.splice(currentFrameIndex, 1);
+                        if (currentFrameIndex >= frames.length) {
+                            currentFrameIndex = frames.length - 1;
+                        }
+                        renderCanvas();
+                        updateFramesContainer();
+                        saveCanvasState();
+                        showFeedbackMessage('Frame deleted.');
+                    });
+                } else {
+                    showModal('Cannot Delete', 'You cannot delete the last frame. Use "Clear" to erase its content.', 'OK');
+                }
+            }
+
+            function playAnimation() {
+                if (isPlaying) return;
+                isPlaying = true;
+                if (playBtn) {
+                    playBtn.textContent = 'Pause';
+                    playBtn.classList.add('active');
+                    playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M14 19H18V5H14M6 19H10V5H6V19Z" /></svg> Pause';
+                }
+                
+                const intervalTime = 1000 / parseInt(fpsInput.value);
+
+                animationInterval = setInterval(() => {
+                    currentFrameIndex = (currentFrameIndex + 1) % frames.length;
+                    renderCanvas();
+                    updateFramesContainer();
+                }, intervalTime);
+            }
+
+            function stopPlayback() {
+                isPlaying = false;
+                if (playBtn) {
+                    playBtn.textContent = 'Play';
+                    playBtn.classList.remove('active');
+                    playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8,5.14V19.14L19,12.14L8,5.14Z" /></svg> Play';
+                }
+                clearInterval(animationInterval);
+            }
+
+            function updateFrameCounter() {
+                if (frameCounter) {
+                    frameCounter.textContent = `Frame: ${currentFrameIndex + 1} / ${frames.length}`;
+                }
+            }
+
+            function updateFrameControlsState() {
+                if (deleteFrameBtn) deleteFrameBtn.disabled = frames.length <= 1;
+                if (playBtn) playBtn.disabled = frames.length <= 0;
+            }
+
+            function setActiveTool(toolName) {
+                activeTool = toolName;
+                if (pencilTool) pencilTool.classList.toggle('active', toolName === 'pencil');
+                if (eraserTool) eraserTool.classList.toggle('active', toolName === 'eraser');
+                if (fillTool) fillTool.classList.toggle('active', toolName === 'fill');
+            }
+
+            function clearCanvas() {
+                frames[currentFrameIndex] = createEmptyFrame();
+                renderCanvas();
+                if(!inChallengeMode) {
+                    updateFramesContainer();
+                }
+                saveCanvasState();
+                showFeedbackMessage('Canvas cleared!');
+            }
+
+            function initializePalette() {
+                if (!charPalette) return;
+
+                charPalette.innerHTML = '';
+                paletteChars.forEach(char => {
+                    const charDiv = document.createElement('div');
+                    charDiv.classList.add('palette-char');
+                    charDiv.textContent = char;
+                    if (char === charInput.value) {
+                        charDiv.classList.add('active');
+                    }
+                    charPalette.appendChild(charDiv);
+                });
+            }
+
+            function selectPaletteChar(selectedCharDiv) {
+                if (charInput) {
+                    charInput.value = selectedCharDiv.textContent;
+                }
+                if (charPalette) {
+                    Array.from(charPalette.children).forEach(div => div.classList.remove('active'));
+                    selectedCharDiv.classList.add('active');
+                }
+            }
+
+            function showModal(title, content, confirmText = 'OK', showCancel = false, onConfirm = () => {}, onCancel = () => {}) {
+                if (!modal || !modalTitle || !modalBody || !modalConfirmBtn || !modalCancelBtn) {
+                    return;
+                }
+
+                modalTitle.textContent = title;
+                modalBody.innerHTML = '';
+                if (typeof content === 'string') {
+                    const p = document.createElement('p');
+                    p.innerHTML = content;
+                    modalBody.appendChild(p);
+                } else {
+                    modalBody.appendChild(content);
+                }
+                
+                modalConfirmBtn.textContent = confirmText;
+                modalCancelBtn.classList.toggle('hidden', !showCancel);
+                modal.style.display = 'flex';
+
+                const modalConfirmHandler = () => { 
+                    modalConfirmBtn.removeEventListener('click', modalConfirmHandler);
+                    modalCancelBtn.removeEventListener('click', modalCancelHandler);
+                    modal.removeEventListener('click', modalOverlayCloseHandler);
+                    onConfirm(); 
+                    hideModal(); 
+                };
+                const modalCancelHandler = () => { 
+                    modalConfirmBtn.removeEventListener('click', modalConfirmHandler);
+                    modalCancelBtn.removeEventListener('click', modalCancelHandler);
+                    modal.removeEventListener('click', modalOverlayCloseHandler);
+                    onCancel(); 
+                    hideModal(); 
+                };
+                const modalOverlayCloseHandler = (e) => { 
+                    if (e.target === modal) {
+                        modalConfirmBtn.removeEventListener('click', modalConfirmHandler);
+                        modalCancelBtn.removeEventListener('click', modalCancelHandler);
+                        modal.removeEventListener('click', modalOverlayCloseHandler);
+                        onCancel();
+                        hideModal(); 
+                    }
+                };
+
+                modalConfirmBtn.addEventListener('click', modalConfirmHandler);
+                if (showCancel) {
+                    modalCancelBtn.addEventListener('click', modalCancelHandler);
+                }
+                modal.addEventListener('click', modalOverlayCloseHandler);
+            }
+
+            function hideModal() {
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+                if (mainCanvas) {
+                    mainCanvas.querySelectorAll('.hint-char').forEach(cell => cell.classList.remove('hint-char'));
+                }
+                if (challengeTraceCanvas) {
+                    challengeTraceCanvas.querySelectorAll('.hint-char').forEach(cell => cell.classList.remove('hint-char'));
+                }
+            }
+            
+            function startChallenge(challengeArt) {
+                hideModal();
+                inChallengeMode = true;
+                stopPlayback();
+
+                const mainControls = document.getElementById('main-controls');
+                if (mainControls) mainControls.classList.add('hidden');
+                if (challengeBar) challengeBar.classList.remove('hidden');
+                
+                frames = [createEmptyFrame()];
+                currentFrameIndex = 0;
+                
+                challengeSolution = [];
+                totalChallengeChars = 0;
+                
+                if (challengeTraceCanvas && challengeTraceCanvas.children) {
+                    for(const cell of challengeTraceCanvas.children) cell.textContent = '';
+                }
+
+                const artRows = challengeArt.length;
+                const artCols = challengeArt[0].length;
+                const startR = Math.floor((ROWS - artRows) / 2);
+                const startC = Math.floor((COLS - artCols) / 2);
+
+                for(let r = 0; r < artRows; r++) {
+                    for(let c = 0; c < artCols; c++) {
+                        const char = challengeArt[r][c];
+                        const globalR = startR + r;
+                        const globalC = startC + c;
+                        if (globalR >= 0 && globalR < ROWS && globalC >= 0 && globalC < COLS) {
+                            challengeSolution[globalR] = challengeSolution[globalR] || Array(COLS).fill(' ');
+                            challengeSolution[globalR][globalC] = char;
+                            if(char !== ' ') totalChallengeChars++;
+                            if (challengeTraceCanvas && challengeTraceCanvas.children[globalR * COLS + globalC]) {
+                                challengeTraceCanvas.children[globalR * COLS + globalC].textContent = char;
+                            }
+                        }
+                    }
+                }
+                renderCanvas();
+                updateChallengeScore();
+                updateNextCharHint();
+                saveCanvasState();
+                showFeedbackMessage(`Challenge started! Trace the pattern.`, 3000);
+                playSound('E5');
+            }
+
+            function endChallenge() {
+                showModal('Quit Challenge', 'Are you sure you want to quit the current challenge? Your progress will be lost.', 'Quit', true, () => {
+                    inChallengeMode = false;
+                    challengeSolution = null;
+                    totalChallengeChars = 0;
+                    
+                    const mainControls = document.getElementById('main-controls');
+                    if (mainControls) mainControls.classList.remove('hidden');
+                    if (challengeBar) challengeBar.classList.add('hidden');
+
+                    if (challengeTraceCanvas && challengeTraceCanvas.children) {
+                        for(const cell of challengeTraceCanvas.children) cell.textContent = '';
+                    }
+                    
+                    frames = [createEmptyFrame()];
+                    currentFrameIndex = 0;
+                    renderCanvas();
+                    updateFramesContainer();
+                    
+                    if (mainCanvas) {
+                        mainCanvas.querySelectorAll('.hint-char').forEach(cell => cell.classList.remove('hint-char'));
+                    }
+                    saveCanvasState();
+                    showFeedbackMessage('Challenge ended.', 2000);
+                });
+            }
+
+            function updateChallengeScore() {
+                if(!inChallengeMode || !challengeSolution) return;
+                let correctChars = 0;
+                const frame = frames[0];
+                if (!frame) return;
+
+                for(let r = 0; r < ROWS; r++) {
+                    for(let c = 0; c < COLS; c++) {
+                        if(challengeSolution[r] && challengeSolution[r][c] !== ' ' && frame[r][c].char === challengeSolution[r][c]) {
+                            correctChars++;
+                        }
+                    }
+                }
+                const score = totalChallengeChars > 0 ? Math.round((correctChars / totalChallengeChars) * 100) : 0;
+                const challengeScoreDisplay = document.getElementById('challenge-score');
+                if (challengeScoreDisplay) {
+                    challengeScoreDisplay.textContent = `${score}%`;
+                }
+                
+                if(score === 100 && totalChallengeChars > 0) {
+                    showModal("Challenge Complete!", "Congratulations! You completed the challenge with 100% accuracy.", 'Awesome!');
+                    playSound('C6');
+                    setTimeout(endChallenge, 1500);
+                }
+            }
+
+            function updateNextCharHint() {
+                if (!inChallengeMode || !challengeSolution) return;
+                const frame = frames[0];
+                if (!frame) return;
+
+                const challengeCharDisplay = document.getElementById('challenge-char-display');
+                if (!challengeCharDisplay) return;
+
+                for(let r = 0; r < ROWS; r++) {
+                    for(let c = 0; c < COLS; c++) {
+                        if(challengeSolution[r] && challengeSolution[r][c] !== ' ' && frame[r][c].char !== challengeSolution[r][c]){
+                            challengeCharDisplay.textContent = challengeSolution[r][c];
+                            return;
+                        }
+                    }
+                }
+                challengeCharDisplay.textContent = '🎉';
+            }
+
+            function showHint() {
+                if (!inChallengeMode || !challengeSolution) return;
+                const frame = frames[0];
+                if (!frame) return;
+
+                const missingCells = [];
+                for(let r = 0; r < ROWS; r++) {
+                    for(let c = 0; c < COLS; c++) {
+                        if(challengeSolution[r] && challengeSolution[r][c] !== ' ' && frame[r][c].char !== challengeSolution[r][c]){
+                            missingCells.push({r, c});
+                        }
+                        }
+                }
+
+                if (missingCells.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * missingCells.length);
+                    const {r, c} = missingCells[randomIndex];
+                    
+                    const cellElement = mainCanvas ? mainCanvas.children[r * COLS + c] : null;
+                    if (cellElement) {
+                        cellElement.classList.add('hint-char');
+                        playSound('C3');
+                        clearTimeout(hintTimeout);
+                        hintTimeout = setTimeout(() => cellElement.classList.remove('hint-char'), 1000);
+                    }
+                } else {
+                    showFeedbackMessage("No more characters to hint!", 1500);
+                    playSound('C2');
+                }
+            }
+            
+            function showSolution() {
+                showModal('Reveal Solution', 'Are you sure you want to reveal the solution? This will complete the challenge with your current score.', 'Reveal', true, () => {
+                    if (!inChallengeMode || !challengeSolution) return;
+                    const frame = frames[0];
+                    if (!frame) return;
+
+                    for(let r = 0; r < ROWS; r++) {
+                        for(let c = 0; c < COLS; c++) {
+                            const solutionChar = challengeSolution[r] ? challengeSolution[r][c] : ' ';
+                            if (solutionChar !== ' ') {
+                                frame[r][c] = { char: solutionChar, color: colorPicker.value };
+                            } else {
+                                frame[r][c] = { char: ' ', color: '#e0e0e0' };
+                            }
+                        }
+                    }
+                    renderCanvas();
+                    updateChallengeScore();
+                    endChallenge();
+                    showFeedbackMessage("Solution revealed.", 2000);
+                    playSound('C6');
+                });
+            }
+
+            function handleDrawEvent(e) {
+                let target;
+                if(e.touches) {
+                    if (e.touches.length === 0) return;
+                    const touch = e.touches[0];
+                    target = document.elementFromPoint(touch.clientX, touch.clientY);
+                } else {
+                    if (e.type === 'mousemove' && e.buttons !== 1) return; 
+                    target = e.target;
+                }
+                
+                if (!target || !target.classList.contains('grid-cell')) return;
+
+                const r = parseInt(target.dataset.row);
+                const c = parseInt(target.dataset.col);
+
+                const isStartOfStroke = (e.type === 'mousedown' || e.type === 'touchstart');
+                
+                if (inChallengeMode) {
+                    if (!challengeSolution || !challengeSolution[r] || challengeSolution[r][c] === undefined) return;
+
+                    const targetChar = challengeSolution[r][c];
+                    if (activeTool === 'pencil') {
+                        if (targetChar !== ' ') {
+                            if (frames[0] && frames[0][r] && frames[0][r][c].char !== targetChar) {
+                                frames[0][r][c] = { char: targetChar, color: colorPicker.value };
+                                renderCanvas();
+                                updateChallengeScore();
+                                updateNextCharHint();
+                                if (isStartOfStroke) playSound('D5');
+                            }
+                        } else {
+                            if (frames[0] && frames[0][r] && frames[0][r][c].char !== ' ') {
+                                frames[0][r][c] = { char: ' ', color: '#e0e0e0' };
+                                renderCanvas();
+                                updateChallengeScore();
+                                if (isStartOfStroke) playSound('A4');
+                            }
+                        }
+                    } else if (activeTool === 'eraser') {
+                        if (challengeSolution[r][c] === ' ' && frames[0] && frames[0][r] && frames[0][r][c].char !== ' ') {
+                            frames[0][r][c] = { char: ' ', color: '#e0e0e0' };
+                            renderCanvas();
+                            updateChallengeScore();
+                            if (isStartOfStroke) playSound('A3');
+                        } else if (challengeSolution[r][c] !== ' ' && frames[0] && frames[0][r] && frames[0][r][c].char === challengeSolution[r][c]) {
+                             showFeedbackMessage("Cannot erase part of the solution.", 1000);
+                             if (isStartOfStroke) playSound('C#2');
+                        }
+                    } else if (activeTool === 'fill') {
+                        showFeedbackMessage("Fill tool not available in Challenge Mode.", 1500);
+                        if (isStartOfStroke) playSound('C#2');
+                    }
+                    if (isStartOfStroke) saveCanvasState();
+                } else {
+                    draw(r, c, isStartOfStroke);
+                    if (isStartOfStroke) saveCanvasState();
+                }
+            }
+            
+            function draw(r, c, playSoundNow = false) {
+                const currentFrame = frames[currentFrameIndex];
+                if (!currentFrame || !currentFrame[r] || currentFrame[r][c] === undefined) return;
+                
+                const oldChar = currentFrame[r][c].char;
+                const oldColor = currentFrame[r][c].color;
+                let newChar, newColor;
+
+                if (activeTool === 'pencil') {
+                    newChar = charInput.value.length === 0 ? ' ' : charInput.value;
+                    if(isRainbowMode) {
+                        rainbowHue = (rainbowHue + 1) % 360;
+                        newColor = `hsl(${rainbowHue}, 100%, 50%)`;
+                    } else {
+                        newColor = colorPicker.value;
+                    }
+                    if (currentFrame[r][c].char !== newChar || currentFrame[r][c].color !== newColor) {
+                        currentFrame[r][c] = { char: newChar, color: newColor };
+                        if (playSoundNow) playSound('C4');
+                    }
+                } else if (activeTool === 'eraser') {
+                    newChar = ' ';
+                    newColor = '#e0e0e0';
+                    if (currentFrame[r][c].char !== newChar || currentFrame[r][c].color !== newColor) {
+                        currentFrame[r][c] = { char: newChar, color: newColor };
+                        if (playSoundNow) playSound('A3');
+                    }
+                } else if (activeTool === 'fill') {
+                    newChar = charInput.value.length === 0 ? ' ' : charInput.value;
+                    newColor = isRainbowMode ? `hsl(${rainbowHue}, 100%, 50%)` : colorPicker.value;
+
+                    if (oldChar === newChar && oldColor === newColor) {
+                        return;
+                    }
+                    
+                    const cellsToFill = [{r, c}];
+                    const visited = new Set();
+                    visited.add(`${r},${c}`);
+
+                    let head = 0;
+                    while(head < cellsToFill.length) {
+                        const {r: currR, c: currC} = cellsToFill[head++];
+                        
+                        if (currR >= 0 && currR < ROWS && currC >= 0 && currC < COLS && 
+                            currentFrame[currR][currC].char === oldChar && 
+                            currentFrame[currR][currC].color === oldColor) {
+                            
+                            currentFrame[currR][currC] = { char: newChar, color: newColor };
+
+                            const neighbors = [
+                                {nr: currR - 1, nc: currC},
+                                {nr: currR + 1, nc: currC},
+                                {nr: currR, nc: currC - 1},
+                                {nr: currR, nc: currC + 1} 
+                            ];
+
+                            neighbors.forEach(neighbor => {
+                                const {nr, nc} = neighbor;
+                                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !visited.has(`${nr},${nc}`)) {
+                                    if (currentFrame[nr][nc].char === oldChar && currentFrame[nr][nc].color === oldColor) {
+                                        cellsToFill.push(neighbor);
+                                        visited.add(`${nr},${nc}`);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    if (playSoundNow) playSound('G4');
+                }
+                renderCanvas();
+                updateFramesContainer();
+            }
+
+            function initAudio() {
+                if (audioContextInitiated) return;
+                try {
+                    if (typeof Tone !== 'undefined') {
+                        synth = new Tone.Synth().toDestination(); 
+                        Tone.start(); 
+                        audioContextInitiated = true;
+                    }
+                } catch (e) {
+                    console.error("Failed to start audio context:", e);
+                }
+            }
+
+            function playSound(note) {
+                if (audioContextInitiated && synth) {
+                    synth.triggerAttackRelease(note, '8n'); 
+                }
+            }
+
+            function toggleGrid() {
+                showGrid = !showGrid;
+                if (canvasWrapper) {
+                    canvasWrapper.classList.toggle('no-grid-lines', !showGrid);
+                }
+                if (gridToggleBtn) {
+                    gridToggleBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 10V14H12V10H22M10 10V14H2V10H10M22 4V8H12V4H22M10 4V8H2V4H10M22 16V20H12V16H22M10 16V20H2V16H10Z" /></svg> Grid: ${showGrid ? 'ON' : 'OFF'}`;
+                }
+                playSound('B3');
+            }
+
+            function updateGridVisibility() {
+                if (canvasWrapper) {
+                    canvasWrapper.classList.toggle('no-grid-lines', !showGrid);
+                }
+            }
+
+            function applyZoom() {
+                CELL_SIZE = BASE_CELL_SIZE * zoomLevel;
+                initializeCanvasDOM(mainCanvas);
+                initializeCanvasDOM(challengeTraceCanvas);
+                renderCanvas();
+                if (inChallengeMode && challengeSolution) {
+                    for(let r = 0; r < ROWS; r++) {
+                        for(let c = 0; c < COLS; c++) {
+                            const char = challengeSolution[r][c];
+                            if (char !== ' ') {
+                                if (challengeTraceCanvas && challengeTraceCanvas.children[r * COLS + c]) {
+                                    challengeTraceCanvas.children[r * COLS + c].textContent = char;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            function saveLocal() {
+                try {
+                    const dataToSave = {
+                        frames: frames,
+                        currentFrameIndex: currentFrameIndex,
+                        rainbowMode: isRainbowMode,
+                        activeTool: activeTool,
+                        charInput: charInput ? charInput.value : '#',
+                        color: colorPicker ? colorPicker.value : '#00f7ff',
+                        fps: fpsInput ? fpsInput.value : 8,
+                        showGrid: showGrid
+                    };
+                    localStorage.setItem('ArtAlleyData', JSON.stringify(dataToSave));
+                    showFeedbackMessage('Artwork saved!', 3000);
+                    playSound('C6');
+                } catch (e) {
+                    showModal('Save Error', 'Failed to save. Your browser storage might be full.', 'OK');
+                }
+            }
+
+            function loadLocal() {
+                showModal('Load Artwork', 'Loading will erase your current work. Are you sure?', 'Load', true, () => {
+                    try {
+                        const savedData = localStorage.getItem('asciiArtAlleyData');
+                        if (savedData) {
+                            const data = JSON.parse(savedData);
+                            frames = data.frames || [createEmptyFrame()];
+                            currentFrameIndex = data.currentFrameIndex || 0;
+                            isRainbowMode = data.rainbowMode !== undefined ? data.rainbowMode : false;
+                            activeTool = data.activeTool || 'pencil';
+                            if (charInput) charInput.value = data.charInput || '#';
+                            if (colorPicker) colorPicker.value = data.color || '#00f7ff';
+                            if (fpsInput) fpsInput.value = data.fps || 8;
+                            showGrid = data.showGrid !== undefined ? data.showGrid : true;
+
+                            inChallengeMode = false;
+                            
+                            if (document.getElementById('main-controls')) document.getElementById('main-controls').classList.remove('hidden');
+                            if (challengeBar) challengeBar.classList.add('hidden');
+                            
+
+                            if(challengeTraceCanvas && challengeTraceCanvas.children) {
+                                for(const cell of challengeTraceCanvas.children) cell.textContent = '';
+                            }
+                            challengeSolution = null;
+
+                            renderCanvas();
+                            updateFramesContainer();
+                            initializePalette();
+                            setActiveTool(activeTool);
+                            if (rainbowModeBtn) {
+                                rainbowModeBtn.textContent = `Rainbow Mode: ${isRainbowMode ? 'ON' : 'OFF'}`;
+                                rainbowModeBtn.classList.toggle('active', isRainbowMode);
+                            }
+                            if (gridToggleBtn) {
+                                gridToggleBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 10V14H12V10H22M10 10V14H2V10H10M22 4V8H12V4H22M10 4V8H2V4H10M22 16V20H12V16H22M10 16V20H2V16H10Z" /></svg> Grid: ${showGrid ? 'ON' : 'OFF'}`;
+                            }
+                            updateGridVisibility();
+
+                            canvasStateHistory = [];
+                            historyPointer = -1;
+                            saveCanvasState();
+
+                            showFeedbackMessage('Artwork loaded!', 3000);
+                            playSound('C6');
+                        } else {
+                            showFeedbackMessage('No saved artwork found.', 2000);
+                            playSound('C2');
+                        }
+                    }
+                    catch (e) {
+                        showModal('Load Error', 'Failed to load artwork. Data might be corrupted.', 'OK');
+                    }
+                });
+            }
+
+            function welcomeUser() {
+                const welcomeContent = document.createElement('div');
+                welcomeContent.innerHTML = `
+                    <p>Welcome to **<span style="color: var(--primary-color); text-shadow: 0 0 8px var(--primary-color);">ASCII Art Alley</span>**!</p>
+                    <p>Create art and animations using characters.</p>
+                    <p><strong>How to use:</strong></p>
+                    <ul>
+                        <li>Use **Pencil, Eraser, and Fill** tools.</li>
+                        <li>Pick your **character** and **color**.</li>
+                        <li>Turn on **Rainbow Mode** for cool effects.</li>
+                        <li>Make **animations** with frames.</li>
+                        <li>Try a **Challenge** to trace art.</li>
+                        <li>**Save, Load, and Export** your work.</li>
+                        <li>Use **Undo/Redo** for mistakes.</li>
+                        <li>Toggle **Grid** and **Zoom** as needed.</li>
+                    </ul>
+                    <p>Have fun making pixel art with characters!</p>
+                `;
+                showModal('Welcome!', welcomeContent, 'Got it!', false, initAudio);
+            }
+
+            let bgCanvas, bgCtx;
+            let bgParticles = [];
+            const BG_PARTICLE_COUNT = 250; 
+            const BG_PARTICLE_CHARS = ['{', '}', '<', '>', '/', ';', ':', '0', '1', '!', '?', '#', '$', '%', '&', '*', '@', 'M', 'W', 'V', '█', '░', '▓', '▲', '▼', '◀', '▶', '⚡', '★', '⌘', '⌥'];
+            let bgAnimationFrameId;
+            let bgParticleUpdateInterval;
+            const BG_UPDATE_RATE = 30;
+
+            function initBackground() {
+                bgCanvas = document.getElementById('bg-canvas');
+                if (!bgCanvas) return;
+                bgCtx = bgCanvas.getContext('2d');
+                resizeBackgroundCanvas();
+
+                for (let i = 0; i < BG_PARTICLE_COUNT; i++) {
+                    bgParticles.push(createBgParticle());
+                }
+                
+                bgAnimationFrameId = requestAnimationFrame(animateBackgroundDrawLoop);
+                bgParticleUpdateInterval = setInterval(updateBgParticles, BG_UPDATE_RATE);
+
+                bgCanvas.addEventListener('mousemove', handleBackgroundInteraction);
+                bgCanvas.addEventListener('touchmove', handleBackgroundInteraction, { passive: false });
+            }
+
+            function resizeBackgroundCanvas() {
+                if (bgCanvas) {
+                    bgCanvas.width = window.innerWidth;
+                    bgCanvas.height = window.innerHeight;
+                    drawBackgroundParticles();
+                }
+            }
+
+            function createBgParticle() {
+                const hue = Math.floor(Math.random() * 360);
+                const saturation = Math.floor(Math.random() * 30) + 70; 
+                const lightness = Math.floor(Math.random() * 20) + 50; 
+
+                return {
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    char: BG_PARTICLE_CHARS[Math.floor(Math.random() * BG_PARTICLE_CHARS.length)],
+                    speed: Math.random() * 0.8 + 0.3,
+                    opacity: Math.random() * 0.18 + 0.07,
+                    color: `hsla(${hue}, ${saturation}%, ${lightness}%, 1)`,
+                    size: Math.random() * 14 + 10,
+                    vx: (Math.random() - 0.5) * 0.15,
+                    vy: (Math.random() * 0.5) + 0.15,
+                    glowIntensity: 0
+                };
+            }
+
+            function updateBgParticles() {
+                bgParticles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+
+                    if (p.y > bgCanvas.height + p.size) {
+                        Object.assign(p, createBgParticle());
+                        p.y = -p.size; 
+                        p.x = Math.random() * bgCanvas.width;
+                    }
+                    if (p.x > bgCanvas.width + p.size) p.x = -p.size;
+                    if (p.x < -p.size) p.x = bgCanvas.width + p.size;
+
+                    if (p.glowIntensity > 0) {
+                        p.glowIntensity = Math.max(0, p.glowIntensity - 0.03); 
+                    }
+                });
+            }
+
+            function drawBackgroundParticles() {
+                if (!bgCtx || !bgCanvas) return;
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+                bgParticles.forEach(p => {
+                    bgCtx.save();
+                    if (p.glowIntensity > 0) {
+                        const glowAlpha = p.glowIntensity * 0.8; 
+                        bgCtx.shadowBlur = 30 * p.glowIntensity; 
+                        bgCtx.shadowColor = `hsla(${p.color.match(/\d+/g)[0]}, 100%, 70%, ${glowAlpha})`;
+                    }
+                    bgCtx.fillStyle = p.color;
+                    bgCtx.globalAlpha = p.opacity + (p.glowIntensity * 0.5);
+                    bgCtx.font = `${p.size}px "Roboto Mono"`;
+                    bgCtx.fillText(p.char, p.x, p.y);
+                    bgCtx.restore();
+                });
+            }
+
+            function animateBackgroundDrawLoop() {
+                drawBackgroundParticles();
+                bgAnimationFrameId = requestAnimationFrame(animateBackgroundDrawLoop);
+            }
+
+            function handleBackgroundInteraction(e) {
+                e.preventDefault();
+                const rect = bgCanvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                const x = clientX - rect.left;
+                const y = clientY - rect.top;
+
+                bgParticles.forEach(p => {
+                    const distance = Math.sqrt(Math.pow(p.x - x, 2) + Math.pow(p.y - y, 2));
+                    const maxInfluenceDist = 120;
+                    if (distance < maxInfluenceDist) {
+                        const influence = 1 - (distance / maxInfluenceDist);
+                        p.glowIntensity = Math.min(1, p.glowIntensity + (influence * 0.2));
+                        p.vx += (p.x - x) * 0.0003;
+                        p.vy += (p.y - y) * 0.0003;
+                    }
+                });
+            }
+
+            function debounce(func, delay) {
+                let timeout;
+                return function(...args) {
+                    const context = this;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(context, args), delay);
+                };
+            }
+
+            function initializeApp() {
+                initBackground(); 
+                initializeCanvasDOM(mainCanvas);
+                initializeCanvasDOM(challengeTraceCanvas);
+                frames.push(createEmptyFrame());
+                currentFrameIndex = 0;
+                initializePalette();
+                renderCanvas();
+                updateFramesContainer();
+                updateFrameControlsState();
+                saveCanvasState(); 
+
+                window.addEventListener('resize', debounce(() => {
+                    const newMaxCanvasWidth = Math.min(window.innerWidth * 0.95, 1200);
+                    let newCELL_SIZE_base = Math.floor(newMaxCanvasWidth / COLS);
+                    newCELL_SIZE_base = Math.max(8, Math.min(newCELL_SIZE_base, 20));
+                    
+                    if (newCELL_SIZE_base !== BASE_CELL_SIZE) {
+                        BASE_CELL_SIZE = newCELL_SIZE_base;
+                        applyZoom();
+                    }
+                    resizeBackgroundCanvas(); 
+                }, 250));
+
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+
+                if (mainCanvas) {
+                    mainCanvas.addEventListener('mousedown', (e) => { 
+                        initAudio(); 
+                        isDrawing = true; 
+                        handleDrawEvent(e);
+                    });
+                    mainCanvas.addEventListener('mousemove', (e) => { 
+                        if (isDrawing) { 
+                            handleDrawEvent(e); 
+                        } 
+                    });
+                    mainCanvas.addEventListener('mouseleave', () => { 
+                        isDrawing = false; 
+                    }); 
+                    mainCanvas.addEventListener('touchstart', (e) => { 
+                        initAudio();
+                        e.preventDefault();
+                        isDrawing = true; 
+                        handleDrawEvent(e); 
+                    }, { passive: false });
+                    mainCanvas.addEventListener('touchmove', (e) => { 
+                        e.preventDefault();
+                        if (isDrawing) { 
+                            handleDrawEvent(e); 
+                        } 
+                    }, { passive: false });
+                    mainCanvas.addEventListener('touchend', () => { 
+                        isDrawing = false; 
+                    });
+                }
+                document.addEventListener('mouseup', () => { 
+                    isDrawing = false; 
+                });
+
+                if (pencilTool) pencilTool.addEventListener('click', () => {setActiveTool('pencil'); playSound('E4');});
+                if (eraserTool) eraserTool.addEventListener('click', () => {setActiveTool('eraser'); playSound('A3');});
+                if (fillTool) fillTool.addEventListener('click', () => {setActiveTool('fill'); playSound('C5');});
+                
+                if (charPalette) charPalette.addEventListener('click', (e) => { if(e.target.classList.contains('palette-char')) { selectPaletteChar(e.target); playSound('G4');} });
+                if (charInput) charInput.addEventListener('input', (e) => {
+                    const char = e.target.value;
+                    if (charPalette) {
+                        Array.from(charPalette.children).forEach(div => {
+                            div.classList.toggle('active', div.textContent === char);
+                        });
+                    }
+                });
+
+                if (clearBtn) clearBtn.addEventListener('click', () => { showModal('Clear Canvas', 'Are you sure you want to clear the current canvas?', 'Yes, Clear', true, clearCanvas); playSound('G3'); });
+                
+                if (addFrameBtn) addFrameBtn.addEventListener('click', () => { addFrame(); playSound('C5'); });
+                if (copyFrameBtn) copyFrameBtn.addEventListener('click', () => { copyFrame(); playSound('E5'); });
+                if (deleteFrameBtn) deleteFrameBtn.addEventListener('click', () => { deleteFrame(); playSound('A4'); });
+                if (playBtn) playBtn.addEventListener('click', () => { isPlaying ? stopPlayback() : playAnimation(); playSound('G5'); });
+                if (fpsInput) fpsInput.addEventListener('input', () => {
+                    if (fpsDisplay) fpsDisplay.textContent = fpsInput.value;
+                    if(isPlaying) { stopPlayback(); playAnimation(); }
+                });
+
+                if (rainbowModeBtn) rainbowModeBtn.addEventListener('click', () => {
+                    isRainbowMode = !isRainbowMode;
+                    rainbowModeBtn.textContent = `Rainbow Mode: ${isRainbowMode ? 'ON' : 'OFF'}`;
+                    rainbowModeBtn.classList.toggle('active', isRainbowMode);
+                    playSound(isRainbowMode ? 'F#4' : 'F4');
+                });
+
+                if (exportBtn) exportBtn.addEventListener('click', () => {
+                    const text = frames.map(frame => 
+                        frame.map(row => row.map(cell => cell.char).join('')).join('\n')
+                    ).join('\n\n--- FRAME ---\n\n');
+                    
+                    const blob = new Blob([text], { type: 'text/plain' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'my-ascii-animation.txt';
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 100); 
+                    showFeedbackMessage('Artwork exported!', 3000);
+                    playSound('D#5');
+                });
+                
+                if (undoBtn) undoBtn.addEventListener('click', () => { restoreCanvasState(historyPointer - 1); playSound('D4'); });
+                if (redoBtn) redoBtn.addEventListener('click', () => { restoreCanvasState(historyPointer + 1); playSound('D#4'); });
+                if (gridToggleBtn) gridToggleBtn.addEventListener('click', toggleGrid);
+                if (zoomInBtn) zoomInBtn.addEventListener('click', () => { 
+                    if (zoomLevel < MAX_ZOOM) {
+                        zoomLevel = Math.min(MAX_ZOOM, zoomLevel + ZOOM_STEP);
+                        applyZoom();
+                        showFeedbackMessage(`Zoom: ${Math.round(zoomLevel * 100)}%`);
+                        playSound('C4'); 
+                    } else {
+                        playSound('C#2');
+                    }
+                });
+                if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { 
+                    if (zoomLevel > MIN_ZOOM) {
+                        zoomLevel = Math.max(MIN_ZOOM, zoomLevel - ZOOM_STEP);
+                        applyZoom();
+                        showFeedbackMessage(`Zoom: ${Math.round(zoomLevel * 100)}%`);
+                        playSound('C3'); 
+                    } else {
+                        playSound('C#2');
+                    }
+                });
+                if (saveBtn) saveBtn.addEventListener('click', saveLocal);
+                if (loadBtn) loadBtn.addEventListener('click', loadLocal);
+
+                if (challengeBtn) {
+                    challengeBtn.addEventListener('click', () => {
+                        const body = document.createElement('div');
+                        body.innerHTML = `<p>Choose a **challenge difficulty** to start. Your current drawing will be cleared.</p>`;
+                        
+                        const difficultySelect = document.createElement('select');
+                        difficultySelect.id = 'challenge-difficulty-select';
+                        ['Easy', 'Medium', 'Hard'].forEach(difficulty => {
+                            const option = document.createElement('option');
+                            option.value = difficulty;
+                            option.textContent = difficulty;
+                            difficultySelect.appendChild(option);
+                        });
+                        body.appendChild(difficultySelect);
+
+                        const selectionDiv = document.createElement('div');
+                        selectionDiv.id = 'challenge-selection';
+                        body.appendChild(selectionDiv);
+
+                        function populateChallengeSelection(difficulty) {
+                            selectionDiv.innerHTML = '';
+                            const selectedChallenges = challenges[difficulty];
+                            if (!selectedChallenges) return;
+
+                            for(const name in selectedChallenges){
+                                const preview = document.createElement('div');
+                                preview.classList.add('challenge-preview');
+                                preview.textContent = selectedChallenges[name].join('\n');
+                                
+                                preview.onclick = (() => {
+                                    const challengeArt = selectedChallenges[name];
+                                    return () => startChallenge(challengeArt);
+                                })();
+                                selectionDiv.appendChild(preview);
+                            }
+                        }
+
+                        difficultySelect.addEventListener('change', (e) => {
+                            populateChallengeSelection(e.target.value);
+                        });
+
+                        populateChallengeSelection(difficultySelect.value);
+
+                        showModal("Start Challenge", body, 'Cancel', true, () => {}, () => {});
+                    });
+                }
+                
+                if (newChallengeBtn) {
+                    newChallengeBtn.addEventListener('click', () => {
+                        const difficulties = Object.keys(challenges);
+                        const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+                        const difficultyChallenges = challenges[randomDifficulty];
+                        const challengeNames = Object.keys(difficultyChallenges);
+                        const randomChallengeName = challengeNames[Math.floor(Math.random() * challengeNames.length)];
+                        const randomChallengeArt = difficultyChallenges[randomChallengeName];
+                        startChallenge(randomChallengeArt);
+                    });
+                }
+
+                if (quitChallengeBtn) quitChallengeBtn.addEventListener('click', endChallenge);
+                if (hintBtn) hintBtn.addEventListener('click', showHint);
+                if (showSolutionBtn) showSolutionBtn.addEventListener('click', showSolution);
+
+                welcomeUser();
+            }
+
+            initializeApp();
+
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
